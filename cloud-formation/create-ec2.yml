@@ -1,13 +1,40 @@
+Parameters:
+  EC2InstanceType:
+    Description: 'EC2 instance type'
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t2.nano
+    ConstraintDescription: 'Must be a valid EC2 instance type.'
+
+  KeyPairName:
+    Description: 'Key pair name.'
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    ConstraintDescription: 'Must be an existing KeyPair'
+
+Mappings:
+  RegionMap:
+    ap-southeast-1:
+      AMI: ami-091a58610910a87a9
+    us-east-1:
+      AMI: ami-08a52ddb321b32a8c
+    ap-northeast-2:
+      AMI: ami-0f2ce0bfb34039f29
+
 Resources:
   MyEc2InstanceCf:
     Type: 'AWS::EC2::Instance'
     Properties:
-      InstanceType: t2.micro
+      InstanceType: !Ref EC2InstanceType
       SecurityGroups:
         - !Ref TestSg
-        - AmazonLinux2-sg
-      KeyName: EC2Demo # key pair name
-      ImageId: ami-08a52ddb321b32a8c
+      KeyName: !Ref KeyPairName
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - AMI
+
   TestSg:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
