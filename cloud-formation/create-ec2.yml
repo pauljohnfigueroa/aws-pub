@@ -11,7 +11,7 @@ Parameters:
   KeyPairName:
     Description: 'Key pair name.'
     Type: 'AWS::EC2::KeyPair::KeyName'
-    ConstraintDescription: 'Must be an existing KeyPair'
+    ConstraintDescription: 'Must be an existing key pair'
 
 Mappings:
   RegionMap:
