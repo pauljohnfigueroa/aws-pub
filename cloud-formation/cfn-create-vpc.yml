@@ -25,3 +25,50 @@ Resources:
       Tags:
         - Key: Name
           Value: !Ref EnvironmentName
+
+  IGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Ref EnvironmentName
+
+  IGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref IGW
+      VpcId: !Ref VPC1
+
+  VpcPublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC1
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Ref VpcPublicSubnet1CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Public Subnet 1
+
+  SecurityGroup1:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC1
+      GroupDescription: 'Allow SSH to port 22 from 0.0.0.0/0'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Ref EnvironmentName
+
+  EC2Instance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      SubnetId: !Ref VpcPublicSubnet1
+      ImageId: ami-0464f90f5928bccb8
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - !Ref SecurityGroup1
