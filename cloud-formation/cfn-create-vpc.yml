@@ -1,4 +1,4 @@
-Description: This template deploys a VPC, subnets, NAT Gateway, and the required EC2 instances.
+Description: This template deploys a VPC, Subnets, Internet Gateway, and the required EC2 instances.
 
 Parameters:
   EnvironmentName:
@@ -15,13 +15,19 @@ Parameters:
     Type: String
     Default: 192.168.1.0/24
 
+Mappings:
+  RegionMap:
+    us-east-1:
+      'HVM64': 'ami-051f7e7f6c2f40dc1'
+    ap-southeast-1:
+      'HVM64': 'ami-0464f90f5928bccb8'
+
 Resources:
   VPC1:
     Type: AWS::EC2::VPC
     Properties:
       CidrBlock: !Ref VpcCIDR
       EnableDnsSupport: true
-      EnableDnsHostNames: true
       Tags:
         - Key: Name
           Value: !Ref EnvironmentName
@@ -38,6 +44,22 @@ Resources:
     Properties:
       InternetGatewayId: !Ref IGW
       VpcId: !Ref VPC1
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC1
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-Public-Routes
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IGWAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref IGW
 
   VpcPublicSubnet1:
     Type: AWS::EC2::Subnet
@@ -62,13 +84,16 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Ref EnvironmentName
+          Value: !Sub ${EnvironmentName}-sg1
 
   EC2Instance1:
     Type: AWS::EC2::Instance
     Properties:
       SubnetId: !Ref VpcPublicSubnet1
-      ImageId: ami-0464f90f5928bccb8
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', HVM64]
       InstanceType: t2.micro
       SecurityGroupIds:
         - !Ref SecurityGroup1
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-ec2-1
