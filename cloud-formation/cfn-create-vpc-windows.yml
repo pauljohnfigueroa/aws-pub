@@ -19,11 +19,12 @@ Parameters:
 Mappings:
   RegionMap:
     us-east-1:
-      'AMI': 'ami-051f7e7f6c2f40dc1'
+      'AMI': 'ami-09301a37d119fe4c5'
     ap-southeast-1:
-      'AMI': 'ami-0464f90f5928bccb8'
+      'AMI': 'ami-062508d30d9f2cb68'
 
 Resources:
+  # VPC
   VPC1:
     Type: AWS::EC2::VPC
     Properties:
@@ -33,6 +34,7 @@ Resources:
         - Key: Name
           Value: !Ref EnvironmentName
 
+  # Internet Gateway
   IGW:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -40,12 +42,14 @@ Resources:
         - Key: Name
           Value: !Ref EnvironmentName
 
+  # Attach Internet Gateway to the VPC
   IGWAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       InternetGatewayId: !Ref IGW
       VpcId: !Ref VPC1
 
+  # Public routes
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -54,6 +58,7 @@ Resources:
         - Key: Name
           Value: !Sub ${EnvironmentName}-Public-Routes
 
+  # Default Public Route
   DefaultPublicRoute:
     Type: AWS::EC2::Route
     DependsOn: IGWAttachment
@@ -62,12 +67,14 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref IGW
 
+  # Associate subnet
   VpcPublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref VpcPublicSubnet1
 
+  # Public Subnet
   VpcPublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -79,6 +86,7 @@ Resources:
         - Key: Name
           Value: !Sub ${EnvironmentName} Public Subnet 1
 
+  # Security group
   SecurityGroup1:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -86,17 +94,18 @@ Resources:
       GroupDescription: 'Allow SSH via port 22 from 0.0.0.0/0'
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
+          FromPort: 3389
+          ToPort: 3389
+          CidrIp: 0.0.0.0/32
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-sg1
 
+  # EC2
   EC2Instance1:
     Type: AWS::EC2::Instance
     Properties:
-      KeyName: Ref" 'ec'
+      KeyName: 'test-keypair'
       SubnetId: !Ref VpcPublicSubnet1
       ImageId: !FindInMap
         - RegionMap
@@ -108,3 +117,37 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-ec2-1
+
+  # SNS Topic
+  MySNSTopic1:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: SendEmailSNS # Optional
+      TopicName: SendEmailSNS
+
+  # SNS Topic 1
+  MySNSEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref MySNSTopic1
+      Endpoint: pjsfigueroa@gmail.com
+
+  # Alarm
+  CloudWatchAlarm1:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: CPUUtilizationExceeded80
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 1
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Period: 60
+      Statistic: Average
+      Threshold: 80
+      AlarmDescription: 'CPUUtilization exceeded 80%.'
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref EC2Instance1
+      AlarmActions:
+        - !Ref MySNSTopic1
