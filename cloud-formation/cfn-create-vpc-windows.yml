@@ -208,6 +208,7 @@ Resources:
           - Effect: Allow
             Principal: '*'
             Action:
-              - '*'
+              - 's3:*'
             Resource:
               - !Sub 'arn:aws:s3:::${DbBackupS3Bucket}'
+                !Sub 'arn:aws:s3:::${DbBackupS3Bucket}/*'
