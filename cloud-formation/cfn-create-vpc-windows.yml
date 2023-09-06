@@ -9,28 +9,36 @@ Parameters:
   AdminEmailAddress:
     Description: Please enter the email address to be used for notifications.
     Type: String
+    ConstraintDescription: 'You must be able to login to this email to confirm the subscription from SNS.'
+    Default: ''
+
+  InstanceType1:
+    Description: Select an instance type
+    Type: 'String'
+    Default: 't2.micro'
+    AllowedValues: ['t2.micro', 't3.xlarge', 'm5.large']
+
+  KeyPair1:
+    Description: Please enter a pre-existing key pair's name.
+    Type: String
     Default: ''
 
   MyIpAddress:
-    Description: Please enter the CIDR for your IP Address
+    Description: Please enter the CIDR for your IP Address. Must be in X.X.X.X/32 format.
     Type: String
     Default: 0.0.0.0/0
 
   VpcCIDR:
-    Description: Please enter the CIDR for this VPC.
+    Description: Please enter the CIDR for this VPC. Example 10.0.0.0/16
     Type: String
     Default: 10.0.0.0/16
 
   VpcPublicSubnet1CIDR:
-    Description: Please enter the CIDR for this subnet
+    Description: Please enter the CIDR for this subnet. Example 10.0.1.0/24
     Type: String
     Default: 10.0.1.0/24
 
-  # S3BucketForDbBackup:
-  #   Description: Please enter the S3 bucket name for the database backups (must be a pre-existing bucket)
-  #   Type: String
-  #   Default: ''
-
+# Windows Server 2022 with SQL Server 2019 Standard AMIs
 Mappings:
   RegionMap:
     us-east-1:
@@ -39,7 +47,7 @@ Mappings:
       'AMI': 'ami-062508d30d9f2cb68'
 
 Resources:
-  # VPC
+  # Create a VPC
   VPC1:
     Type: AWS::EC2::VPC
     Properties:
@@ -49,7 +57,7 @@ Resources:
         - Key: Name
           Value: !Ref EnvironmentName
 
-  # Internet Gateway
+  # Create an Internet Gateway
   IGW:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -57,14 +65,14 @@ Resources:
         - Key: Name
           Value: !Ref EnvironmentName
 
-  # Attach Internet Gateway to the VPC
+  # Attach the Internet Gateway to the VPC
   IGWAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       InternetGatewayId: !Ref IGW
       VpcId: !Ref VPC1
 
-  # Public routes
+  # Create a public route
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -73,7 +81,7 @@ Resources:
         - Key: Name
           Value: !Sub ${EnvironmentName}-Public-Routes
 
-  # Default Public Route
+  # Create a default public route to the IGW
   DefaultPublicRoute:
     Type: AWS::EC2::Route
     DependsOn: IGWAttachment
@@ -82,19 +90,19 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref IGW
 
-  # Associate subnet
+  # Associate subnet to the PublicRouteTable route table
   VpcPublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref VpcPublicSubnet1
 
-  # Public Subnet
+  # Create a public subnet
   VpcPublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC1
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Select [1, !GetAZs ''] # Create subnet in the second AZ in the Region
       CidrBlock: !Ref VpcPublicSubnet1CIDR
       MapPublicIpOnLaunch: true
       Tags:
@@ -106,7 +114,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       VpcId: !Ref VPC1
-      GroupDescription: 'Allow RDP via port 3389 from 0.0.0.0/0'
+      GroupDescription: 'Allow RDP via port 3389 from MyIpAddress only'
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3389
@@ -116,7 +124,7 @@ Resources:
         - Key: Name
           Value: !Sub ${EnvironmentName}-sg1
 
-  # EC2
+  # Create an EC2 instance
   EC2Instance1Profile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
@@ -124,16 +132,17 @@ Resources:
       Roles:
         - Ref: 'S3BucketForBackupsRole'
 
+  # Create an EC2 instance
   EC2Instance1:
     Type: AWS::EC2::Instance
     Properties:
-      KeyName: 'test-keypair' # key pair
+      KeyName: !Ref KeyPair1
       SubnetId: !Ref VpcPublicSubnet1
       ImageId: !FindInMap
         - RegionMap
         - !Ref 'AWS::Region'
         - AMI
-      InstanceType: t2.micro
+      InstanceType: !Ref InstanceType1
       IamInstanceProfile: !Ref EC2Instance1Profile
       SecurityGroupIds:
         - !Ref SecurityGroup1
@@ -156,7 +165,7 @@ Resources:
       TopicArn: !Ref MySNSTopic1
       Endpoint: !Ref AdminEmailAddress
 
-  # Alarm
+  # Alarm Avg. CPUUtilization Exceeds 80%
   CloudWatchAlarm1:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -165,7 +174,7 @@ Resources:
       EvaluationPeriods: 1
       MetricName: CPUUtilization
       Namespace: AWS/EC2
-      Period: 60
+      Period: 60 # 1 minute
       Statistic: Average
       Threshold: 80
       AlarmDescription: 'CPU Utilization exceeded 80%.'
