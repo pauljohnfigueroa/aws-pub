@@ -117,6 +117,13 @@ Resources:
           Value: !Sub ${EnvironmentName}-sg1
 
   # EC2
+  EC2Instance1Profile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: '/'
+      Roles:
+        - Ref: 'S3BucketForBackupsRole'
+
   EC2Instance1:
     Type: AWS::EC2::Instance
     Properties:
@@ -127,7 +134,7 @@ Resources:
         - !Ref 'AWS::Region'
         - AMI
       InstanceType: t2.micro
-      IamInstanceProfile: !Ref S3BucketForBackupsRole
+      IamInstanceProfile: !Ref EC2Instance1Profile
       SecurityGroupIds:
         - !Ref SecurityGroup1
       Tags:
@@ -256,4 +263,4 @@ Resources:
               - 's3:*'
             Resource:
               - !GetAtt S3BucketForBackups.Arn
-              - !Sub 'arn:aws:s3:::${S3BucketForBackups.Arn}/*'
+              - !Sub '${S3BucketForBackups.Arn}/*'
