@@ -3,21 +3,21 @@ Description: This template deploys a VPC, Subnets, Internet Gateway, and the req
 
 Parameters:
   EnvironmentName:
-    Description: Environment name that will get prefixed to resource names
+    Description: Environment name that will get prefixed to resource names.
     Type: String
 
-  MyEmailAddress:
-    Description: Please enter your email to be used with SNS
+  AdminEmailAddress:
+    Description: Please enter the email address to be used for notifications.
     Type: String
     Default: ''
 
   MyIpAddress:
-    Description: Please enter the CIDR for your Ip address
+    Description: Please enter the CIDR for your IP Address
     Type: String
     Default: 0.0.0.0/0
 
   VpcCIDR:
-    Description: Please enter the CIDR for this VPC
+    Description: Please enter the CIDR for this VPC.
     Type: String
     Default: 10.0.0.0/16
 
@@ -26,10 +26,10 @@ Parameters:
     Type: String
     Default: 10.0.1.0/24
 
-  DbBackupS3Bucket:
-    Description: Please enter the S3 bucket name for the database backups (bucket must be pre-existing)
-    Type: String
-    Default: ''
+  # S3BucketForDbBackup:
+  #   Description: Please enter the S3 bucket name for the database backups (must be a pre-existing bucket)
+  #   Type: String
+  #   Default: ''
 
 Mappings:
   RegionMap:
@@ -127,6 +127,7 @@ Resources:
         - !Ref 'AWS::Region'
         - AMI
       InstanceType: t2.micro
+      IamInstanceProfile: !Ref S3BucketForBackupsRole
       SecurityGroupIds:
         - !Ref SecurityGroup1
       Tags:
@@ -146,7 +147,7 @@ Resources:
     Properties:
       Protocol: email
       TopicArn: !Ref MySNSTopic1
-      Endpoint: !Ref MyEmailAddress
+      Endpoint: !Ref AdminEmailAddress
 
   # Alarm
   CloudWatchAlarm1:
@@ -193,6 +194,50 @@ Resources:
   # Send email to the Administrator whenever Instance State Changes [starting, stopping, etc]
   # Create a log group for CPUUtilization Alarms
 
+  # Create an S3 Bucket for the backups
+  S3BucketForBackups:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+
+  # Bucket Role
+  S3BucketForBackupsRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'sts:AssumeRole'
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+
+  # Bucket Assume Role Policy
+  S3BucketForBackupsPolicy1:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 's3:PutObject'
+              - 's3:GetObject'
+              - 's3:DeleteObject'
+              - 's3:ListBucket'
+            Effect: Allow
+            Resource:
+              - !Join
+                - ''
+                - - 'arn:aws:s3:::'
+                  - !Ref S3BucketForBackups
+              - !Join
+                - ''
+                - - 'arn:aws:s3:::'
+                  - !Ref S3BucketForBackups
+                  - /*
+      PolicyName: S3BucketForBackupsPolicy
+      Roles:
+        - !Ref S3BucketForBackupsRole
+
   # VPC Endpoint Gateway for S3
   S3GatewayEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -210,5 +255,5 @@ Resources:
             Action:
               - 's3:*'
             Resource:
-              - !Sub 'arn:aws:s3:::${DbBackupS3Bucket}'
-                !Sub 'arn:aws:s3:::${DbBackupS3Bucket}/*'
+              - !GetAtt S3BucketForBackups.Arn
+              - !Sub 'arn:aws:s3:::${S3BucketForBackups.Arn}/*'
